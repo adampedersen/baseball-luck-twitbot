@@ -6,14 +6,58 @@ import (
     "log"
 	"os"
 	"strings"
+	"io/ioutil"
+	"net/http"
+	"strconv"
+	"math"
 )
-
+/*
+stat number:
+0 1 2  3  4  5  6  7   8  9    10   11  12  13   14   15   16   17  18  19  20
+# G PA HR R RBI SB BB% K% ISO BABIP AVG OBP SLG wOBA xwOBA wRC+ BsR Off Def WAR
+*/
 func main() {
-	m, err := CSVFileToMap("fangraphs-url-map.csv")
+	playerName := "matt carpenter"
+	str := getLuckRating(playerName)
+	fmt.Println(str)
+}
+
+func getLuckRating(playerName string) string{
+	m, err := CSVFileToMap("fangraphs-id-map.csv") // m will hold player ids
 	if(err != nil){
-		fmt.Println("error")
+		fmt.Println("error with CSVFileToMap")
 	}
-	fmt.Println(m["cody bellinger"])
+	id := m[strings.ToLower(playerName)]
+	wOBAstr := findStat(id,14)
+	xwOBAstr := findStat(id, 15)
+	fmt.Println("wOBAstr: " + wOBAstr)
+	fmt.Println("xwOBAstr: " + xwOBAstr)
+	const bitSize = 64 
+	wOBA, err := strconv.ParseFloat(wOBAstr, bitSize)
+	xwOBA, err := strconv.ParseFloat(xwOBAstr, bitSize)
+	if(err != nil){
+		fmt.Println("error parsing floats")
+		return ""
+	}
+	diff := wOBA - xwOBA
+	ret := playerName
+	if(diff > 0){
+		ret += " has been lucky this year. His wOBA is greater than his xWOBA by: "
+
+	}else{
+		ret += " has been unlucky this year. His wOBA is less than his xWOBA by: "
+	}
+	longDiff := fmt.Sprintf("%f", math.Abs(diff))
+	longDiff = longDiff[:5]
+	ret += longDiff
+	if (diff > 0){
+		ret += " (" + wOBAstr +" - "
+		ret +=  xwOBAstr +")"
+	}else{
+		ret += " (" + xwOBAstr +" - "
+		ret +=  wOBAstr +")"
+	}
+	return ret
 }
 
 //return map: key = player name, value = fangraphs link
@@ -41,5 +85,50 @@ func CSVFileToMap(filePath string) (returnMap map[string]string, err error) {
 	}
 	
 	return returnMap,nil
+}
+
+//stats are after each align="right">
+/*
+stat number:
+0 1 2  3  4  5  6  7   8  9    10   11  12  13   14   15   16   17  18  19  20
+# G PA HR R RBI SB BB% K% ISO BABIP AVG OBP SLG wOBA xwOBA wRC+ BsR Off Def WAR
+*/
+//param: player's fangraphs id, statNumber (above)
+func findStat(id string, statNumber int) string {
+	url := "https://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=0&type=8&season=2022&month=0&season1=2022&ind=0&team=0&rost=0&age=0&filter=&players=" + id + "&startdate=&enddate="
+
+	fmt.Printf("HTML code of %s ...\n", url)
+	resp, err := http.Get(url)
+	// handle the error if there is one
+	if err != nil {
+		panic(err)
+	}
+	// do this now so it won't be forgotten
+	defer resp.Body.Close()
+	// reads html as a slice of bytes
+	html, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	// // show the HTML code as a string %s
+	// fmt.Printf("%s\n", html)
+	respBodyStr := string(html)
+	delim := `align="right">`
+	var stats []string
+	for i := 0;i < 21; i++{
+		i := strings.Index(respBodyStr, delim)
+		j := i + len(delim)
+		respBodyStr = respBodyStr[j:]
+		j = strings.Index(respBodyStr, "<")
+		fmt.Println(respBodyStr[:j])
+		stats = append(stats,respBodyStr[:j])
+	}
+	// fmt.Println(stats)
+	// fmt.Println("return stat :  ")
+	// fmt.Println(statNumber)
+	// fmt.Println("value:  ")
+	// fmt.Println(stats[statNumber])
+	// fmt.Println(" ")
+	return stats[statNumber]
 }
 	
