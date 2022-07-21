@@ -20,8 +20,6 @@ func GetLuckRating(playerName string) string{
 	id := m[strings.ToLower(playerName)]
 	wOBAstr := FindStat(id,14)
 	xwOBAstr := FindStat(id, 15)
-	// fmt.Println("wOBAstr: " + wOBAstr)
-	// fmt.Println("xwOBAstr: " + xwOBAstr)
 	const bitSize = 64 
 	wOBA, err := strconv.ParseFloat(wOBAstr, bitSize)
 	xwOBA, err := strconv.ParseFloat(xwOBAstr, bitSize)
@@ -77,7 +75,6 @@ func CSVFileToMap(filePath string) (returnMap map[string]string, err error) {
 	return returnMap,nil
 }
 
-//stats are after each align="right">
 /*
 stat number:
 0 1 2  3  4  5  6  7   8  9    10   11  12  13   14   15   16   17  18  19  20
@@ -86,8 +83,6 @@ stat number:
 //param: player's fangraphs id, statNumber (above)
 func FindStat(id string, statNumber int) string {
 	url := "https://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=0&type=8&season=2022&month=0&season1=2022&ind=0&team=0&rost=0&age=0&filter=&players=" + id + "&startdate=&enddate="
-
-	// fmt.Printf("HTML code of %s ...\n", url)
 	resp, err := http.Get(url)
 	// handle the error if there is one
 	if err != nil {
@@ -100,8 +95,6 @@ func FindStat(id string, statNumber int) string {
 	if err != nil {
 		panic(err)
 	}
-	// // show the HTML code as a string %s
-	// fmt.Printf("%s\n", html)
 	respBodyStr := string(html)
 	delim := `align="right">`
 	var stats []string
@@ -110,15 +103,9 @@ func FindStat(id string, statNumber int) string {
 		j := i + len(delim)
 		respBodyStr = respBodyStr[j:]
 		j = strings.Index(respBodyStr, "<")
-		// fmt.Println(respBodyStr[:j])
 		stats = append(stats,respBodyStr[:j])
 	}
-	// fmt.Println(stats)
-	// fmt.Println("return stat :  ")
-	// fmt.Println(statNumber)
-	// fmt.Println("value:  ")
-	// fmt.Println(stats[statNumber])
-	// fmt.Println(" ")
+
 	return stats[statNumber]
 }
 	
