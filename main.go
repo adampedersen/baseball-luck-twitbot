@@ -1,134 +1,58 @@
 package main
-
+	//must set GOTWI_API_KEY and GOTWI_API_KEY_SECRET 
+	//environment variables for gotwi API
 import (
-    "bufio"
     "fmt"
-    "log"
 	"os"
-	"strings"
-	"io/ioutil"
-	"net/http"
-	"strconv"
-	"math"
+	"context"
+
+	"github.com/michimani/gotwi"
+	"github.com/michimani/gotwi/tweet/managetweet"
+	"github.com/michimani/gotwi/tweet/managetweet/types"
+
+	"github.com/adampedersen/luck-factor-bot/pkg/stats"
+	
 )
-/*
-stat number:
-0 1 2  3  4  5  6  7   8  9    10   11  12  13   14   15   16   17  18  19  20
-# G PA HR R RBI SB BB% K% ISO BABIP AVG OBP SLG wOBA xwOBA wRC+ BsR Off Def WAR
-*/
+
 func main() {
-	playerName := "matt carpenter"
-	str := getLuckRating(playerName)
+	playerName := "Cody Bellinger"
+	str := stats.GetLuckRating(playerName)
 	fmt.Println(str)
-}
-
-func getLuckRating(playerName string) string{
-	m, err := CSVFileToMap("fangraphs-id-map.csv") // m will hold player ids
-	if(err != nil){
-		fmt.Println("error with CSVFileToMap")
-	}
-	id := m[strings.ToLower(playerName)]
-	wOBAstr := findStat(id,14)
-	xwOBAstr := findStat(id, 15)
-	fmt.Println("wOBAstr: " + wOBAstr)
-	fmt.Println("xwOBAstr: " + xwOBAstr)
-	const bitSize = 64 
-	wOBA, err := strconv.ParseFloat(wOBAstr, bitSize)
-	xwOBA, err := strconv.ParseFloat(xwOBAstr, bitSize)
-	if(err != nil){
-		fmt.Println("error parsing floats")
-		return ""
-	}
-	diff := wOBA - xwOBA
-	ret := playerName
-	if(diff > 0){
-		ret += " has been lucky this year. His wOBA is greater than his xWOBA by: "
-
-	}else{
-		ret += " has been unlucky this year. His wOBA is less than his xWOBA by: "
-	}
-	longDiff := fmt.Sprintf("%f", math.Abs(diff))
-	longDiff = longDiff[:5]
-	ret += longDiff
-	if (diff > 0){
-		ret += " (" + wOBAstr +" - "
-		ret +=  xwOBAstr +")"
-	}else{
-		ret += " (" + xwOBAstr +" - "
-		ret +=  wOBAstr +")"
-	}
-	return ret
-}
-
-//return map: key = player name, value = fangraphs link
-func CSVFileToMap(filePath string) (returnMap map[string]string, err error) {
-	returnMap = make(map[string]string)
-	// read csv file
-	file, err := os.Open(filePath)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer file.Close()
-
-    scanner := bufio.NewScanner(file)
-    // optionally, resize scanner's capacity for lines over 64K, see next example
-    for scanner.Scan() {
-		s := scanner.Text()
-		i := strings.Index(s, ",")
-		k := s[:i]
-		v := s[(i+1):]
-		returnMap[k] = v
-    }
-
-    if err := scanner.Err(); err != nil {
-        log.Fatal(err)
-	}
+	accessToken := os.Getenv("TWITTER_ACCESS_TOKEN")
+	accessTokenSecret := os.Getenv("TWITTER_ACCESS_SECRET")
 	
-	return returnMap,nil
-}
+	in := &gotwi.NewClientInput{
+		AuthenticationMethod: gotwi.AuthenMethodOAuth1UserContext,
+		OAuthToken:           accessToken,
+		OAuthTokenSecret:     accessTokenSecret,
+	}
 
-//stats are after each align="right">
-/*
-stat number:
-0 1 2  3  4  5  6  7   8  9    10   11  12  13   14   15   16   17  18  19  20
-# G PA HR R RBI SB BB% K% ISO BABIP AVG OBP SLG wOBA xwOBA wRC+ BsR Off Def WAR
-*/
-//param: player's fangraphs id, statNumber (above)
-func findStat(id string, statNumber int) string {
-	url := "https://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=0&type=8&season=2022&month=0&season1=2022&ind=0&team=0&rost=0&age=0&filter=&players=" + id + "&startdate=&enddate="
-
-	fmt.Printf("HTML code of %s ...\n", url)
-	resp, err := http.Get(url)
-	// handle the error if there is one
+	oauth1Client, err := gotwi.NewClient(in)
 	if err != nil {
 		panic(err)
 	}
-	// do this now so it won't be forgotten
-	defer resp.Body.Close()
-	// reads html as a slice of bytes
-	html, err := ioutil.ReadAll(resp.Body)
+
+	tweetID, err := StringOnlyTweet(oauth1Client, str)
 	if err != nil {
 		panic(err)
 	}
-	// // show the HTML code as a string %s
-	// fmt.Printf("%s\n", html)
-	respBodyStr := string(html)
-	delim := `align="right">`
-	var stats []string
-	for i := 0;i < 21; i++{
-		i := strings.Index(respBodyStr, delim)
-		j := i + len(delim)
-		respBodyStr = respBodyStr[j:]
-		j = strings.Index(respBodyStr, "<")
-		fmt.Println(respBodyStr[:j])
-		stats = append(stats,respBodyStr[:j])
-	}
-	// fmt.Println(stats)
-	// fmt.Println("return stat :  ")
-	// fmt.Println(statNumber)
-	// fmt.Println("value:  ")
-	// fmt.Println(stats[statNumber])
-	// fmt.Println(" ")
-	return stats[statNumber]
+
+	fmt.Println("Posted successfully. ID: ", tweetID)
+
 }
-	
+
+func StringOnlyTweet(c *gotwi.Client, text string) (string, error) {
+	p := &types.CreateInput{
+		Text: gotwi.String(text),
+	}
+
+	res, err := managetweet.Create(context.Background(), c, p)
+	if err != nil {
+		return "", err
+	}
+
+	return gotwi.StringValue(res.Data.ID), nil
+}
+
+
+
